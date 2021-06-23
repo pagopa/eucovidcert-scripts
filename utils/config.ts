@@ -1,3 +1,4 @@
+/* eslint-disable sort-keys */
 /**
  * Config module
  *
@@ -20,6 +21,13 @@ export const IConfig = t.interface({
 
   NOTIFY_USER_QUEUE_CONNECTION: NonEmptyString,
   NOTIFY_USER_QUEUE_NAME: NonEmptyString,
+
+  SCRIPT_STORAGE_CONNECTION_STRING: NonEmptyString,
+  PROFILE_TABLE_NAME: NonEmptyString,
+  PROFILE_WITH_MESSAGE_TABLE_NAME: NonEmptyString,
+  BATCH_RESULT_TABLE_NAME: NonEmptyString,
+
+  DGC_SERVICE_ID: NonEmptyString,
 
   isProduction: t.boolean,
 });
