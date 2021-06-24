@@ -1,13 +1,23 @@
 /* eslint-disable max-params */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { createWriteStream } from "fs";
-import { QueueService, TableQuery, TableService } from "azure-storage";
+import {
+  ErrorOrResult,
+  QueueService,
+  ServiceResponse,
+  TableQuery,
+  TableService,
+} from "azure-storage";
 import { Container } from "@azure/cosmos";
 
+import { toError } from "fp-ts/lib/Either";
 import * as te from "fp-ts/lib/TaskEither";
 import {
   getInsertBulkFiscalCodes,
   getPagedQuery,
+  iterateOnPages,
+  PagedQuery,
+  TableEntry,
 } from "../utils/table_storage";
 import { IConfig } from "../utils/config";
 import { getFiscalCodes, getFiscalCodesWithAMessage } from "../utils/cosmosdb";
@@ -92,6 +102,19 @@ const populateFiscalCodeWithMessageTable = async (
 };
 
 /**
+ * Fetches all user hashed returned by the provided paged query
+ */
+export const queryUsers = async (
+  pagedQuery: PagedQuery
+): Promise<ReadonlySet<TableEntry>> => {
+  const entries = new Set<TableEntry>();
+  for await (const page of iterateOnPages(pagedQuery)) {
+    page.forEach((e) => entries.add(e));
+  }
+  return entries;
+};
+
+/**
  *
  */
 export const getHandler =
@@ -105,7 +128,12 @@ export const getHandler =
       typeof getInsertBulkFiscalCodes
     >,
     { NOTIFY_USER_QUEUE_NAME, DGC_SERVICE_ID, PROFILE_TABLE_NAME }: IConfig,
-    queryForAllProfiles: ReturnType<typeof createQueryForAllProfiles>
+    queryForAllProfiles: (
+      table: string,
+      tableQuery: TableQuery,
+      currentToken: TableService.TableContinuationToken,
+      callback: ErrorOrResult<TableService.QueryEntitiesResult<TableEntry>>
+    ) => void
   ) =>
   async (
     fromId: string = fiscaCodeLowerBound,
@@ -129,44 +157,21 @@ export const getHandler =
       logger
     );
 
-    // te.taskEither
-    //   .of<Error, ReturnType<typeof getProfilesWithoutMessages>>(
-    //     getProfilesWithoutMessages(new TableQuery().select())
-    //   )
-    //   .chain((query) =>
-    //     te
-    //       .tryCatch(() => queryUsers(cgnExpirationQuery), toError)
-    //       .map((readSet) => Array.from(readSet.values()))
-    //   );
-
     const query = new TableQuery().select();
 
-    // eslint-disable-next-line no-var
-    var nextContinuationToken =
-      null as unknown as TableService.TableContinuationToken;
-    queryForAllProfiles(
-      PROFILE_TABLE_NAME,
-      query,
-      nextContinuationToken,
-      (error, results) => {
-        if (error) {
-          throw error;
-        }
-        // eslint-disable-next-line no-console
-        results.entries.forEach(console.log);
-        if (results.continuationToken) {
-          nextContinuationToken = results.continuationToken;
-        }
-      }
-    );
+    await te.taskEither
+      .of<Error, ReturnType<typeof getProfilesWithoutMessages>>(
+        getProfilesWithoutMessages(query)
+      )
+      .chain((allUsersQuery) =>
+        te
+          .tryCatch(() => queryUsers(allUsersQuery), toError)
+          // eslint-disable-next-line no-console
+          .map((s) => s.forEach((v) => console.log(`------> ${v}`)))
+      )
+      .run();
+
 
     logger.finalize();
   };
 
-// new Promise<void>((resolve, reject) =>
-//         queueService.createMessage(queueName, e.fiscalCode, (_) =>
-//           _ ? reject(_) : resolve()
-//         )
-//       )
-//         .then(() => logger.logSuccess(e.fiscalCode))
-//         .catch((error) => logger.logFailure(e.fiscalCode, error))

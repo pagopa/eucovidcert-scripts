@@ -1,4 +1,10 @@
-import { createTableService, QueueService, Tab } from "azure-storage";
+import {
+  createTableService,
+  ErrorOrResult,
+  QueueService,
+  TableQuery,
+  TableService,
+} from "azure-storage";
 import { getConfigOrThrow } from "../utils/config";
 import { cosmosdbClient } from "../utils/cosmosdb";
 import {
@@ -28,17 +34,15 @@ const messageContainer = cosmosdbClient
   .database(config.COSMOSDB_NAME)
   .container(MESSAGES_COLLECTION_NAME);
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const createQueryForAllProfiles =
-  (ts: ReturnType<typeof createTableService>) =>
+  <T>(ts: TableService) =>
   (
     table: string,
     tableQuery: TableQuery,
     currentToken: TableService.TableContinuationToken,
-    options: TableService.TableEntityRequestOptions,
     callback: ErrorOrResult<TableService.QueryEntitiesResult<T>>
-  ) =>
-    ts.queryEntities(table, tableQuery, currentToken, options, callback);
+  ): void =>
+    ts.queryEntities(table, tableQuery, currentToken, callback);
 
 tableService.createTableIfNotExists(
   config.PROFILE_WITH_MESSAGE_TABLE_NAME,
