@@ -11,7 +11,7 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "lint": "eslint . -c .eslintrc.js --ext .ts,.tsx --cache",
-    "start:debug": "dotenv -e .env node ./dist/notifyMissingUsers/index.js",
+    "start:get": "dotenv -e .env node ./dist/getMissingUsers/index.js",
     "start:send": "dotenv -e .env node ./dist/sendMissingUsers/index.js"
   },
   "devDependencies": {

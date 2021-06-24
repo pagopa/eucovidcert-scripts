@@ -10,9 +10,7 @@ import { cosmosdbClient } from "../utils/cosmosdb";
 import {
   getDeleteBulkFiscalCodes,
   getInsertBulkFiscalCodes,
-  getUdateBulkFiscalCodes,
 } from "../utils/table_storage";
-import { getPagedQuery } from "../utils/table_storage";
 import { getHandler } from "./handler";
 
 export const MESSAGES_COLLECTION_NAME = "messages";
@@ -64,13 +62,10 @@ tableService.createTableIfNotExists(
         getHandler(
           profileContainer,
           messageContainer,
-          getPagedQuery(tableService, config.PROFILE_TABLE_NAME),
           queueService,
           getInsertBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
           getDeleteBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
-          getUdateBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
-          config,
-          createQueryForAllProfiles(tableService)
+          config
         )(fromId, toId)
           .then((c) => {
             // eslint-disable-next-line no-console

@@ -45,13 +45,16 @@ const createLogger = () => {
     flags: "a",
   });
   // header
-  logStream.write(`log level,\ttext\n`);
+  logStream.write(`time,\tlog level,\ttext\n`);
 
   return {
     finalize: (): void => logStream.close(),
     logFailure: (info: string, error: unknown): boolean =>
-      logStream.write(`failure,\t${info}: ${error}\n`),
-    logInfo: (info: string): boolean => logStream.write(`info,${info}\t\n`),
+      logStream.write(
+        `${new Date().toISOString()},failure,\t${info}: ${error}\n`
+      ),
+    logInfo: (info: string): boolean =>
+      logStream.write(`${new Date().toISOString()},info,${info}\n`),
   };
 };
 
@@ -154,29 +157,19 @@ export const getHandler =
   (
     profileContainer: Container,
     messageContainer: Container,
-    getProfilesWithoutMessages: ReturnType<typeof getPagedQuery>,
     queueService: QueueService,
     insertBulkAllFiscalCodes: ReturnType<typeof getInsertBulkFiscalCodes>,
     insertBulkFiscalCodesWithMessage: ReturnType<
       typeof getInsertBulkFiscalCodes
     >,
-    updateBulkFiscalCodesWithMessage: ReturnType<
-      typeof getInsertBulkFiscalCodes
-    >,
-    { NOTIFY_USER_QUEUE_NAME, DGC_SERVICE_ID, PROFILE_TABLE_NAME }: IConfig,
-    queryForAllProfiles: (
-      table: string,
-      tableQuery: TableQuery,
-      currentToken: TableService.TableContinuationToken,
-      callback: ErrorOrResult<TableService.QueryEntitiesResult<TableEntry>>
-    ) => void
+    { DGC_SERVICE_ID }: IConfig
   ) =>
   async (
     fromId: string = fiscaCodeLowerBound,
     toId: string = fiscaCodeUpperBound
   ): Promise<void> => {
     const logger = createLogger();
-
+    logger.logInfo("starting populateAllFiscalCodeTable()");
     await populateAllFiscalCodeTable(
       profileContainer,
       fromId,
@@ -184,6 +177,8 @@ export const getHandler =
       insertBulkAllFiscalCodes,
       logger
     );
+    logger.logInfo("ended populateAllFiscalCodeTable()");
+    logger.logInfo("starting cleanupFiscalCodeWithMessageTable()");
     await cleanupFiscalCodeWithMessageTable(
       messageContainer,
       DGC_SERVICE_ID,
@@ -192,29 +187,7 @@ export const getHandler =
       insertBulkFiscalCodesWithMessage,
       logger
     );
-
-    await te.taskEither
-      .of<Error, ReturnType<typeof getProfilesWithoutMessages>>(
-        getProfilesWithoutMessages(new TableQuery().select())
-      )
-      .chain((allUsersQuery) =>
-        te.tryCatch(async () => {
-          for await (const page of iterateOnPages(allUsersQuery)) {
-            // eslint-disable-next-line no-console
-            await sendPage(
-              queueService,
-              NOTIFY_USER_QUEUE_NAME,
-              updateBulkFiscalCodesWithMessage,
-              page
-            ).run();
-          }
-        }, toError)
-      )
-      .run();
+    logger.logInfo("ended cleanupFiscalCodeWithMessageTable()");
 
     logger.finalize();
   };
-interface IOpStatus {
-  readonly fiscalCode: string;
-  readonly status: string;
-}
