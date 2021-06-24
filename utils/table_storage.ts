@@ -1,3 +1,7 @@
+/* eslint-disable functional/immutable-data */
+/* eslint-disable functional/no-let */
+/* eslint-disable prefer-const */
+/* eslint-disable functional/prefer-readonly-type */
 import {
   Constants,
   ServiceResponse,
@@ -9,9 +13,10 @@ import {
 import * as e from "fp-ts/lib/Either";
 import * as o from "fp-ts/lib/Option";
 
-import { TaskEither, taskify } from "fp-ts/lib/TaskEither";
+import { TaskEither, taskify, taskEither } from "fp-ts/lib/TaskEither";
 import { NonEmptyString } from "@pagopa/ts-commons/lib/strings";
 import { Either } from "fp-ts/lib/Either";
+import { array } from "fp-ts/lib/Array";
 
 const Operations = Constants.TableConstants.Operations;
 
@@ -23,22 +28,40 @@ export const getOperationBulkFiscalCodes =
     fiscalCodes: ReadonlyArray<string>,
     // eslint-disable-next-line @typescript-eslint/ban-types
     optionalValues?: object
-  ): TaskEither<Error, ReadonlyArray<TableService.BatchResult>> => {
+  ): TaskEither<
+    Error,
+    ReadonlyArray<ReadonlyArray<TableService.BatchResult>>
+  > => {
+    // TaskEither<Error, ReadonlyArray<TableService.BatchResult>> => {
     const eg = TableUtilities.entityGenerator;
 
-    const tableBatch = new TableBatch();
+    const entities = fiscalCodes.map((fc) => ({
+      ...optionalValues,
+      PartitionKey: eg.String("1"),
+      RowKey: eg.String(fc),
+    }));
+    // .forEach((entity) => tableBatch.addOperation(op, entity));
 
-    fiscalCodes
-      .map((fc) => ({
-        ...optionalValues,
-        PartitionKey: eg.String("1"),
-        RowKey: eg.String(fc),
-      }))
-      .forEach((entity) => tableBatch.addOperation(op, entity));
+    let batches: TableBatch[] = [];
+    let i = 0;
+    for (const entity of entities) {
+      if (i === 0) {
+        batches.push(new TableBatch());
+      }
+      batches[batches.length - 1].addOperation(op, entity);
+      i++;
+      if (i === 99) {
+        i = 0;
+      }
+    }
 
-    return taskify<Error, ReadonlyArray<TableService.BatchResult>>((cb) =>
-      tableService.executeBatch(tableName, tableBatch, cb)
-    )();
+    return array.sequence(taskEither)(
+      batches.map((b) =>
+        taskify<Error, ReadonlyArray<TableService.BatchResult>>((cb) =>
+          tableService.executeBatch(tableName, b, cb)
+        )()
+      )
+    );
   };
 
 export const getInsertBulkFiscalCodes = (
