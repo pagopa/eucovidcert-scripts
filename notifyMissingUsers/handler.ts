@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable max-params */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { createWriteStream } from "fs";
@@ -7,6 +8,7 @@ import {
   ServiceResponse,
   TableQuery,
   TableService,
+  TableUtilities,
 } from "azure-storage";
 import { Container } from "@azure/cosmos";
 
@@ -25,6 +27,15 @@ import { createQueryForAllProfiles } from ".";
 
 const fiscaCodeLowerBound = "A".repeat(16);
 const fiscaCodeUpperBound = "Z".repeat(16);
+
+const TO_SEND = "TO_SEND";
+const ERROR = "ERROR";
+const SENDED = "SENDED";
+
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+const getStatusCodeItem = (status: string) => ({
+  Status: TableUtilities.entityGenerator.String(status),
+});
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const createLogger = () => {
@@ -61,7 +72,8 @@ const populateAllFiscalCodeTable = async (
 
   for await (const results of iterator.getAsyncIterator()) {
     await insertBulkAllFiscalCodes(
-      results.resources.map((obj) => obj.fiscalCode)
+      results.resources.map((obj) => obj.fiscalCode),
+      getStatusCodeItem(TO_SEND)
     )
       .run()
       .then((_) => logger.logSuccess(""))
@@ -72,7 +84,7 @@ const populateAllFiscalCodeTable = async (
 /**
  *
  */
-const populateFiscalCodeWithMessageTable = async (
+const cleanupFiscalCodeWithMessageTable = async (
   messageContainer: Container,
   serviceId: string,
   fromId: string,
@@ -102,19 +114,6 @@ const populateFiscalCodeWithMessageTable = async (
 };
 
 /**
- * Fetches all user hashed returned by the provided paged query
- */
-export const queryUsers = async (
-  pagedQuery: PagedQuery
-): Promise<ReadonlySet<TableEntry>> => {
-  const entries = new Set<TableEntry>();
-  for await (const page of iterateOnPages(pagedQuery)) {
-    page.forEach((e) => entries.add(e));
-  }
-  return entries;
-};
-
-/**
  *
  */
 export const getHandler =
@@ -125,6 +124,9 @@ export const getHandler =
     queueService: QueueService,
     insertBulkAllFiscalCodes: ReturnType<typeof getInsertBulkFiscalCodes>,
     insertBulkFiscalCodesWithMessage: ReturnType<
+      typeof getInsertBulkFiscalCodes
+    >,
+    updateBulkFiscalCodesWithMessage: ReturnType<
       typeof getInsertBulkFiscalCodes
     >,
     { NOTIFY_USER_QUEUE_NAME, DGC_SERVICE_ID, PROFILE_TABLE_NAME }: IConfig,
@@ -148,7 +150,7 @@ export const getHandler =
       insertBulkAllFiscalCodes,
       logger
     );
-    await populateFiscalCodeWithMessageTable(
+    await cleanupFiscalCodeWithMessageTable(
       messageContainer,
       DGC_SERVICE_ID,
       fromId,
@@ -157,21 +159,44 @@ export const getHandler =
       logger
     );
 
-    const query = new TableQuery().select();
 
     await te.taskEither
       .of<Error, ReturnType<typeof getProfilesWithoutMessages>>(
-        getProfilesWithoutMessages(query)
+        getProfilesWithoutMessages(new TableQuery().select())
       )
       .chain((allUsersQuery) =>
-        te
-          .tryCatch(() => queryUsers(allUsersQuery), toError)
-          // eslint-disable-next-line no-console
-          .map((s) => s.forEach((v) => console.log(`------> ${v}`)))
+        te.tryCatch(async () => {
+          for await (const page of iterateOnPages(allUsersQuery)) {
+            // eslint-disable-next-line no-console
+            for await (const fiscalCode of page.map((e) => e.RowKey._)) {
+              await new Promise<string>((resolve, reject) => {
+                queueService.createMessage(
+                  NOTIFY_USER_QUEUE_NAME,
+                  fiscalCode,
+                  (_) => (_ ? reject(_) : resolve(fiscalCode))
+                );
+              })
+                .then(async (fc) => {
+                  console.log(`---> SUCCESS ${fiscalCode} <---`);
+                  await updateBulkFiscalCodesWithMessage(
+                    [fc],
+                    getStatusCodeItem(SENDED)
+                  ).run();
+                  logger.logSuccess(fc);
+                })
+                .catch(async (error) => {
+                  await updateBulkFiscalCodesWithMessage(
+                    [fiscalCode],
+                    getStatusCodeItem(ERROR)
+                  ).run();
+                  console.log(`---> ERROR ${fiscalCode} <---`);
+                  logger.logFailure(fiscalCode, error);
+                });
+            }
+          }
+        }, toError)
       )
       .run();
 
-
     logger.finalize();
   };
-

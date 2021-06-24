@@ -10,6 +10,7 @@ import { cosmosdbClient } from "../utils/cosmosdb";
 import {
   getDeleteBulkFiscalCodes,
   getInsertBulkFiscalCodes,
+  getUdateBulkFiscalCodes,
 } from "../utils/table_storage";
 import { getPagedQuery } from "../utils/table_storage";
 import { getHandler } from "./handler";
@@ -67,6 +68,7 @@ tableService.createTableIfNotExists(
           queueService,
           getInsertBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
           getDeleteBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
+          getUdateBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
           config,
           createQueryForAllProfiles(tableService)
         )(fromId, toId)

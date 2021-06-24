@@ -20,7 +20,9 @@ const Operations = Constants.TableConstants.Operations;
 export const getOperationBulkFiscalCodes =
   (tableService: TableService, tableName: NonEmptyString, op: string) =>
   (
-    fiscalCodes: ReadonlyArray<string>
+    fiscalCodes: ReadonlyArray<string>,
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    optionalValues?: object
   ): TaskEither<Error, ReadonlyArray<TableService.BatchResult>> => {
     const eg = TableUtilities.entityGenerator;
 
@@ -28,6 +30,7 @@ export const getOperationBulkFiscalCodes =
 
     fiscalCodes
       .map((fc) => ({
+        ...optionalValues,
         PartitionKey: eg.String("1"),
         RowKey: eg.String(fc),
       }))
@@ -42,13 +45,23 @@ export const getInsertBulkFiscalCodes = (
   tableService: TableService,
   tableName: NonEmptyString
 ): ReturnType<typeof getOperationBulkFiscalCodes> =>
-  getOperationBulkFiscalCodes(tableService, tableName, Operations.INSERT);
+  getOperationBulkFiscalCodes(
+    tableService,
+    tableName,
+    Operations.INSERT_OR_REPLACE
+  );
 
 export const getDeleteBulkFiscalCodes = (
   tableService: TableService,
   tableName: NonEmptyString
 ): ReturnType<typeof getOperationBulkFiscalCodes> =>
   getOperationBulkFiscalCodes(tableService, tableName, Operations.DELETE);
+
+export const getUdateBulkFiscalCodes = (
+  tableService: TableService,
+  tableName: NonEmptyString
+): ReturnType<typeof getOperationBulkFiscalCodes> =>
+  getOperationBulkFiscalCodes(tableService, tableName, Operations.MERGE);
 
 /**
  * A minimal Youth Card storage table Entry
