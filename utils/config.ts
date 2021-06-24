@@ -10,6 +10,7 @@ import * as t from "io-ts";
 import { ValidationError } from "io-ts";
 import { readableReport } from "@pagopa/ts-commons/lib/reporters";
 import { NonEmptyString } from "@pagopa/ts-commons/lib/strings";
+import { NumberFromString } from "@pagopa/ts-commons/lib/numbers";
 
 // global app configuration
 export type IConfig = t.TypeOf<typeof IConfig>;
@@ -18,6 +19,7 @@ export const IConfig = t.interface({
   COSMOSDB_KEY: NonEmptyString,
   COSMOSDB_NAME: NonEmptyString,
   COSMOSDB_URI: NonEmptyString,
+  COSMOSDB_MAX_ITEM_COUNT: NumberFromString,
 
   NOTIFY_USER_QUEUE_CONNECTION: NonEmptyString,
   NOTIFY_USER_QUEUE_NAME: NonEmptyString,
@@ -28,6 +30,9 @@ export const IConfig = t.interface({
   BATCH_RESULT_TABLE_NAME: NonEmptyString,
 
   DGC_SERVICE_ID: NonEmptyString,
+
+  FISCAL_CODE_LOWER_BOUND: NonEmptyString,
+  FISCAL_CODE_UPPER_BOUND: NonEmptyString,
 
   isProduction: t.boolean,
 });

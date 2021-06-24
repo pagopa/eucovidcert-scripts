@@ -7,6 +7,7 @@ import { getConfigOrThrow } from "./config";
 const config = getConfigOrThrow();
 const cosmosDbUri = config.COSMOSDB_URI;
 const masterKey = config.COSMOSDB_KEY;
+const maxItemCount = config.COSMOSDB_MAX_ITEM_COUNT;
 
 export const cosmosdbClient = new CosmosClient({
   endpoint: cosmosDbUri,
@@ -47,7 +48,9 @@ export const getFiscalCodes = (
       `,
   };
 
-  return profileContainer.items.query<{ readonly fiscalCode: string }>(q);
+  return profileContainer.items.query<{ readonly fiscalCode: string }>(q, {
+    maxItemCount,
+  });
 };
 
 /**
@@ -89,5 +92,7 @@ export const getFiscalCodesWithAMessage = (
       `,
   };
 
-  return messageContainer.items.query<{ readonly fiscalCode: string }>(q);
+  return messageContainer.items.query<{ readonly fiscalCode: string }>(q, {
+    maxItemCount,
+  });
 };

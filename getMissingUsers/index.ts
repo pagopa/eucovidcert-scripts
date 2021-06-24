@@ -1,7 +1,6 @@
 import {
   createTableService,
   ErrorOrResult,
-  QueueService,
   TableQuery,
   TableService,
 } from "azure-storage";
@@ -19,8 +18,6 @@ export const PROFILES_COLLECTION_NAME = "profiles";
 const [, , fromId, toId = fromId] = process.argv;
 
 const config = getConfigOrThrow();
-
-const queueService = new QueueService(config.NOTIFY_USER_QUEUE_CONNECTION);
 
 const tableService = createTableService(
   config.SCRIPT_STORAGE_CONNECTION_STRING
@@ -62,7 +59,6 @@ tableService.createTableIfNotExists(
         getHandler(
           profileContainer,
           messageContainer,
-          queueService,
           getInsertBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
           getDeleteBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
           config
