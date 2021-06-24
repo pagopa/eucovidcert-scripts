@@ -14,6 +14,9 @@ import { Container } from "@azure/cosmos";
 
 import { toError } from "fp-ts/lib/Either";
 import * as te from "fp-ts/lib/TaskEither";
+import * as a from "fp-ts/lib/Array";
+import { identity } from "fp-ts/lib/function";
+import * as t from "fp-ts/lib/Task";
 import {
   getInsertBulkFiscalCodes,
   getPagedQuery,
@@ -113,6 +116,48 @@ const cleanupFiscalCodeWithMessageTable = async (
   }
 };
 
+const sendPage = (
+  queueService: QueueService,
+  NOTIFY_USER_QUEUE_NAME: string,
+  updateBulkFiscalCodesWithMessage: ReturnType<typeof getInsertBulkFiscalCodes>,
+  page: ReadonlyArray<
+    Readonly<{
+      readonly RowKey: Readonly<{
+        readonly _: string;
+      }>;
+    }>
+  >
+): t.Task<ReadonlyArray<string>> =>
+  a.array.sequence(t.task)(
+    page
+      .map((e) => e.RowKey._)
+      .map((fiscalCode) =>
+        te
+          .taskify<Error, QueueService.QueueMessageResult>((cb) =>
+            queueService.createMessage(
+              NOTIFY_USER_QUEUE_NAME,
+              Buffer.from(JSON.stringify({ fiscal_code: fiscalCode })).toString(
+                "base64"
+              ),
+              cb
+            )
+          )()
+          .fold(
+            (_) => ({ fiscalCode, status: ERROR }),
+            (_) => ({ fiscalCode, status: SENDED })
+          )
+          .chain((fc) =>
+            updateBulkFiscalCodesWithMessage(
+              [fc.fiscalCode],
+              getStatusCodeItem(fc.status)
+            ).fold(
+              (l) => fiscalCode,
+              (r) => fiscalCode
+            )
+          )
+      )
+  );
+
 /**
  *
  */
@@ -167,33 +212,12 @@ export const getHandler =
         te.tryCatch(async () => {
           for await (const page of iterateOnPages(allUsersQuery)) {
             // eslint-disable-next-line no-console
-            for await (const fiscalCode of page.map((e) => e.RowKey._)) {
-              await new Promise<string>((resolve, reject) => {
-                queueService.createMessage(
-                  NOTIFY_USER_QUEUE_NAME,
-                  Buffer.from(
-                    JSON.stringify({ fiscal_code: fiscalCode })
-                  ).toString("base64"),
-                  (_) => (_ ? reject(_) : resolve(fiscalCode))
-                );
-              })
-                .then(async (fc) => {
-                  console.log(`---> SUCCESS ${fiscalCode} <---`);
-                  await updateBulkFiscalCodesWithMessage(
-                    [fc],
-                    getStatusCodeItem(SENDED)
-                  ).run();
-                  logger.logSuccess(fc);
-                })
-                .catch(async (error) => {
-                  await updateBulkFiscalCodesWithMessage(
-                    [fiscalCode],
-                    getStatusCodeItem(ERROR)
-                  ).run();
-                  console.log(`---> ERROR ${fiscalCode} <---`);
-                  logger.logFailure(fiscalCode, error);
-                });
-            }
+            await sendPage(
+              queueService,
+              NOTIFY_USER_QUEUE_NAME,
+              updateBulkFiscalCodesWithMessage,
+              page
+            ).run();
           }
         }, toError)
       )
@@ -201,3 +225,7 @@ export const getHandler =
 
     logger.finalize();
   };
+interface IOpStatus {
+  readonly fiscalCode: string;
+  readonly status: string;
+}
