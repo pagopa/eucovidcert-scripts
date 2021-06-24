@@ -25,6 +25,8 @@ local.settings.json
 node_modules
 dist
 
+log.*
+
 # Local python packages
 .python_packages/
 
