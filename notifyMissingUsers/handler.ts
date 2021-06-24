@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /* eslint-disable max-params */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { createWriteStream } from "fs";
@@ -15,18 +14,15 @@ import { Container } from "@azure/cosmos";
 import { toError } from "fp-ts/lib/Either";
 import * as te from "fp-ts/lib/TaskEither";
 import * as a from "fp-ts/lib/Array";
-import { identity } from "fp-ts/lib/function";
 import * as t from "fp-ts/lib/Task";
 import {
   getInsertBulkFiscalCodes,
   getPagedQuery,
   iterateOnPages,
-  PagedQuery,
   TableEntry,
 } from "../utils/table_storage";
 import { IConfig } from "../utils/config";
 import { getFiscalCodes, getFiscalCodesWithAMessage } from "../utils/cosmosdb";
-import { createQueryForAllProfiles } from ".";
 
 const fiscaCodeLowerBound = "A".repeat(16);
 const fiscaCodeUpperBound = "Z".repeat(16);
@@ -40,6 +36,8 @@ const getStatusCodeItem = (status: string) => ({
   Status: TableUtilities.entityGenerator.String(status),
 });
 
+export type Logger = ReturnType<typeof createLogger>;
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const createLogger = () => {
   const logFileName = `${process.cwd()}/log.${Date.now()}.csv`;
@@ -47,14 +45,13 @@ const createLogger = () => {
     flags: "a",
   });
   // header
-  logStream.write(`fiscal_code,result,note\n`);
+  logStream.write(`log level,\ttext\n`);
 
   return {
     finalize: (): void => logStream.close(),
-    logFailure: (fiscalCode: string, error: unknown): boolean =>
-      logStream.write(`${fiscalCode},failure,${error}\n`),
-    logSuccess: (fiscalCode: string): boolean =>
-      logStream.write(`${fiscalCode},success,\n`),
+    logFailure: (info: string, error: unknown): boolean =>
+      logStream.write(`failure,\t${info}: ${error}\n`),
+    logInfo: (info: string): boolean => logStream.write(`info,${info}\t\n`),
   };
 };
 
@@ -65,11 +62,7 @@ const populateAllFiscalCodeTable = async (
   fromId: string,
   toId: string,
   insertBulkAllFiscalCodes: ReturnType<typeof getInsertBulkFiscalCodes>,
-  logger: {
-    readonly finalize: () => void;
-    readonly logFailure: (fiscalCode: string, error: unknown) => boolean;
-    readonly logSuccess: (fiscalCode: string) => boolean;
-  }
+  logger: Logger
 ): Promise<void> => {
   const iterator = getFiscalCodes(profileContainer, fromId, toId);
 
@@ -79,8 +72,7 @@ const populateAllFiscalCodeTable = async (
       getStatusCodeItem(TO_SEND)
     )
       .run()
-      .then((_) => logger.logSuccess(""))
-      .catch((error) => logger.logFailure("", error));
+      .catch((error) => logger.logFailure("insertBulkAllFiscalCodes", error));
   }
 };
 
@@ -92,12 +84,8 @@ const cleanupFiscalCodeWithMessageTable = async (
   serviceId: string,
   fromId: string,
   toId: string,
-  insertBulkFiscalCodesWithMessage: ReturnType<typeof getInsertBulkFiscalCodes>,
-  logger: {
-    readonly finalize: () => void;
-    readonly logFailure: (fiscalCode: string, error: unknown) => boolean;
-    readonly logSuccess: (fiscalCode: string) => boolean;
-  }
+  updateBulkFiscalCodesWithMessage: ReturnType<typeof getInsertBulkFiscalCodes>,
+  logger: Logger
 ): Promise<void> => {
   const iterator = getFiscalCodesWithAMessage(
     messageContainer,
@@ -107,12 +95,13 @@ const cleanupFiscalCodeWithMessageTable = async (
   );
 
   for await (const results of iterator.getAsyncIterator()) {
-    await insertBulkFiscalCodesWithMessage(
+    await updateBulkFiscalCodesWithMessage(
       results.resources.map((obj) => obj.fiscalCode)
     )
       .run()
-      .then((_) => logger.logSuccess(""))
-      .catch((error) => logger.logFailure("", error));
+      .catch((error) =>
+        logger.logFailure("updateBulkFiscalCodesWithMessage", error)
+      );
   }
 };
 
