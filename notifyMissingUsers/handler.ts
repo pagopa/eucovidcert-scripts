@@ -159,7 +159,6 @@ export const getHandler =
       logger
     );
 
-
     await te.taskEither
       .of<Error, ReturnType<typeof getProfilesWithoutMessages>>(
         getProfilesWithoutMessages(new TableQuery().select())
@@ -172,7 +171,9 @@ export const getHandler =
               await new Promise<string>((resolve, reject) => {
                 queueService.createMessage(
                   NOTIFY_USER_QUEUE_NAME,
-                  fiscalCode,
+                  Buffer.from(
+                    JSON.stringify({ fiscal_code: fiscalCode })
+                  ).toString("base64"),
                   (_) => (_ ? reject(_) : resolve(fiscalCode))
                 );
               })
