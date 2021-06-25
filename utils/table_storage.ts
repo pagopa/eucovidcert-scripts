@@ -12,8 +12,9 @@ import {
 } from "azure-storage";
 import * as e from "fp-ts/lib/Either";
 import * as o from "fp-ts/lib/Option";
+import * as te from "fp-ts/lib/TaskEither";
 
-import { TaskEither, taskify, taskEither } from "fp-ts/lib/TaskEither";
+import { TaskEither, taskify } from "fp-ts/lib/TaskEither";
 import { NonEmptyString } from "@pagopa/ts-commons/lib/strings";
 import { Either } from "fp-ts/lib/Either";
 import { array } from "fp-ts/lib/Array";
@@ -55,13 +56,19 @@ export const getOperationBulkFiscalCodes =
       }
     }
 
-    return array.sequence(taskEither)(
-      batches.map((b) =>
-        taskify<Error, ReadonlyArray<TableService.BatchResult>>((cb) =>
-          tableService.executeBatch(tableName, b, cb)
-        )()
+    return array
+      .sequence(te.taskEither)(
+        batches.map((b) =>
+          taskify<Error, ReadonlyArray<TableService.BatchResult>>((cb) =>
+            tableService.executeBatch(tableName, b, cb)
+          )()
+        )
       )
-    );
+      .mapLeft((l) => {
+        // eslint-disable-next-line no-console
+        console.error("getOperationBulkFiscalCodes post sequence error!", l);
+        return l;
+      });
   };
 
 export const getInsertBulkFiscalCodes = (
@@ -84,7 +91,11 @@ export const getUdateBulkFiscalCodes = (
   tableService: TableService,
   tableName: NonEmptyString
 ): ReturnType<typeof getOperationBulkFiscalCodes> =>
-  getOperationBulkFiscalCodes(tableService, tableName, Operations.MERGE);
+  getOperationBulkFiscalCodes(
+    tableService,
+    tableName,
+    Operations.INSERT_OR_MERGE
+  );
 
 /**
  * A minimal Youth Card storage table Entry

@@ -6,8 +6,13 @@ import { getInsertBulkFiscalCodes } from "../utils/table_storage";
 import { IConfig } from "../utils/config";
 import { getFiscalCodes, getFiscalCodesWithAMessage } from "../utils/cosmosdb";
 import { Logger } from "../utils/logger";
+import { getUdateBulkFiscalCodes } from "../utils/table_storage";
+import { isRight } from "fp-ts/lib/Either";
 
 const TO_SEND = "TO_SEND";
+const DELETED = "DELETED";
+
+const MAX_RETRY = 100;
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const getStatusCodeItem = (status: string) => ({
@@ -29,12 +34,23 @@ const populateAllFiscalCodeTable = async (
     logger.logInfo(
       `populateAllFiscalCodeTable fetched ${results.resources.length}`
     );
-    await insertBulkAllFiscalCodes(
-      results.resources.map((obj) => obj.fiscalCode),
-      getStatusCodeItem(TO_SEND)
-    )
-      .run()
-      .catch((error) => logger.logFailure("insertBulkAllFiscalCodes", error));
+    const executeBulkInsert = () =>
+      insertBulkAllFiscalCodes(
+        results.resources.map((obj) => obj.fiscalCode),
+        getStatusCodeItem(TO_SEND)
+      ).mapLeft((azureError) =>
+        logger.logInfo(
+          `populateAllFiscalCodeTable: error received from table storage (batch will be retired) ${JSON.stringify(
+            azureError
+          )}`
+        )
+      );
+    let batchResult = false;
+    let count = 0;
+    do {
+      batchResult = isRight(await executeBulkInsert().run());
+      count++;
+    } while (!batchResult && count < MAX_RETRY);
   }
 };
 
@@ -46,7 +62,7 @@ const cleanupFiscalCodeWithMessageTable = async (
   serviceId: string,
   fromId: string,
   toId: string,
-  updateBulkFiscalCodesWithMessage: ReturnType<typeof getInsertBulkFiscalCodes>,
+  updateBulkFiscalCodesWithMessage: ReturnType<typeof getUdateBulkFiscalCodes>,
   logger: Logger
 ): Promise<void> => {
   const iterator = getFiscalCodesWithAMessage(
@@ -60,13 +76,25 @@ const cleanupFiscalCodeWithMessageTable = async (
     logger.logInfo(
       `cleanupFiscalCodeWithMessageTable fetched ${results.resources.length}`
     );
-    await updateBulkFiscalCodesWithMessage(
-      results.resources.map((obj) => obj.fiscalCode)
-    )
-      .run()
-      .catch((error) =>
-        logger.logFailure("updateBulkFiscalCodesWithMessage", error)
+    const executeBulkUpdate = () =>
+      updateBulkFiscalCodesWithMessage(
+        results.resources
+          .map((obj) => obj.fiscalCode)
+          .filter((elem, index, self) => index === self.indexOf(elem)),
+        getStatusCodeItem(DELETED)
+      ).mapLeft((azureError) =>
+        logger.logInfo(
+          `cleanupFiscalCodeWithMessageTable: error received ftom table storage (batch will be retired) ${JSON.stringify(
+            azureError
+          )}`
+        )
       );
+    let batchResult = false;
+    let count = 0;
+    do {
+      batchResult = isRight(await executeBulkUpdate().run());
+      count++;
+    } while (!batchResult && count < MAX_RETRY);
   }
 };
 
@@ -80,7 +108,7 @@ export const getHandler =
     messageContainer: Container,
     insertBulkAllFiscalCodes: ReturnType<typeof getInsertBulkFiscalCodes>,
     updateBulkFiscalCodesWithMessage: ReturnType<
-      typeof getInsertBulkFiscalCodes
+      typeof getUdateBulkFiscalCodes
     >,
     {
       DGC_SERVICE_ID,

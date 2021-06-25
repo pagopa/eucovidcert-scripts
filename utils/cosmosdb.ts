@@ -40,11 +40,14 @@ export const getFiscalCodes = (
     ],
     // Note: do not use ${collectionName} here as it may contain special characters
     query: `
-        SELECT DISTINCT c.fiscalCode 
+        SELECT c.fiscalCode
         FROM c 
         WHERE 
           c.fiscalCode >= @fromId 
           AND c.fiscalCode <= @toId
+          AND 
+          c.version = 0
+          AND c._ts >= 1623967200
       `,
   };
 
@@ -83,7 +86,7 @@ export const getFiscalCodesWithAMessage = (
     ],
     // Note: do not use ${collectionName} here as it may contain special characters
     query: `
-        SELECT DISTINCT c.fiscalCode 
+        SELECT c.fiscalCode 
         FROM c 
         WHERE 
           c.fiscalCode >= @fromId 

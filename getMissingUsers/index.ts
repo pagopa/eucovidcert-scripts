@@ -6,12 +6,10 @@ import {
 } from "azure-storage";
 import { getConfigOrThrow } from "../utils/config";
 import { cosmosdbClient } from "../utils/cosmosdb";
-import {
-  getDeleteBulkFiscalCodes,
-  getInsertBulkFiscalCodes,
-} from "../utils/table_storage";
+import { getInsertBulkFiscalCodes } from "../utils/table_storage";
 import { createLogger } from "../utils/logger";
 
+import { getUdateBulkFiscalCodes } from "../utils/table_storage";
 import { getHandler } from "./handler";
 
 export const MESSAGES_COLLECTION_NAME = "messages";
@@ -53,7 +51,7 @@ tableService.createTableIfNotExists(config.PROFILE_TABLE_NAME, (err, _res) => {
     profileContainer,
     messageContainer,
     getInsertBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
-    getDeleteBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
+    getUdateBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
     config
   )(fromId, toId)
     .then((c) => {
