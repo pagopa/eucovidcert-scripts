@@ -1,6 +1,5 @@
 /* eslint-disable max-params */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { createWriteStream } from "fs";
 import { QueueService, TableQuery, TableUtilities } from "azure-storage";
 
 import { toError } from "fp-ts/lib/Either";
@@ -22,25 +21,6 @@ const SENDED = "SENDED";
 const getStatusCodeItem = (status: string) => ({
   Status: TableUtilities.entityGenerator.String(status),
 });
-
-export type Logger = ReturnType<typeof createLogger>;
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-const createLogger = () => {
-  const logFileName = `${process.cwd()}/log.${Date.now()}.csv`;
-  const logStream = createWriteStream(logFileName, {
-    flags: "a",
-  });
-  // header
-  logStream.write(`log level,\ttext\n`);
-
-  return {
-    finalize: (): void => logStream.close(),
-    logFailure: (info: string, error: unknown): boolean =>
-      logStream.write(`failure,\t${info}: ${error}\n`),
-    logInfo: (info: string): boolean => logStream.write(`info,${info}\t\n`),
-  };
-};
 
 const sendPage = (
   queueService: QueueService,

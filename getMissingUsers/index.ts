@@ -10,6 +10,8 @@ import {
   getDeleteBulkFiscalCodes,
   getInsertBulkFiscalCodes,
 } from "../utils/table_storage";
+import { createLogger } from "../utils/logger";
+
 import { getHandler } from "./handler";
 
 export const MESSAGES_COLLECTION_NAME = "messages";
@@ -40,40 +42,28 @@ export const createQueryForAllProfiles =
   ): void =>
     ts.queryEntities(table, tableQuery, currentToken, callback);
 
-tableService.createTableIfNotExists(
-  config.PROFILE_WITH_MESSAGE_TABLE_NAME,
-  (err1, _res1) => {
-    if (err1) {
-      // eslint-disable-next-line no-console
-      throw Error("Table PROFILE_WITH_MESSAGE_TABLE_NAME not crated");
-    }
-
-    tableService.createTableIfNotExists(
-      config.PROFILE_TABLE_NAME,
-      (err, _res) => {
-        if (err) {
-          // eslint-disable-next-line no-console
-          throw Error("Table PROFILE_TABLE_NAME not crated");
-        }
-
-        getHandler(
-          profileContainer,
-          messageContainer,
-          getInsertBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
-          getDeleteBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
-          config
-        )(fromId, toId)
-          .then((c) => {
-            // eslint-disable-next-line no-console
-            console.log(`Processed ${c} profiles`);
-            process.exit(0);
-          })
-          .catch((c) => {
-            // eslint-disable-next-line no-console
-            console.error(`Failed to process profiles`, c);
-            process.exit(1);
-          });
-      }
-    );
+tableService.createTableIfNotExists(config.PROFILE_TABLE_NAME, (err, _res) => {
+  if (err) {
+    // eslint-disable-next-line no-console
+    throw Error("Table PROFILE_TABLE_NAME not created");
   }
-);
+
+  getHandler(
+    createLogger(),
+    profileContainer,
+    messageContainer,
+    getInsertBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
+    getDeleteBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
+    config
+  )(fromId, toId)
+    .then((c) => {
+      // eslint-disable-next-line no-console
+      console.log(`Processed ${c} profiles`);
+      process.exit(0);
+    })
+    .catch((c) => {
+      // eslint-disable-next-line no-console
+      console.error(`Failed to process profiles`, c);
+      process.exit(1);
+    });
+});

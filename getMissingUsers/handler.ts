@@ -1,12 +1,11 @@
 /* eslint-disable max-params */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { createWriteStream } from "fs";
 import { TableUtilities } from "azure-storage";
 import { Container } from "@azure/cosmos";
 
 import { getInsertBulkFiscalCodes } from "../utils/table_storage";
 import { IConfig } from "../utils/config";
 import { getFiscalCodes, getFiscalCodesWithAMessage } from "../utils/cosmosdb";
+import { Logger } from "../utils/logger";
 
 const TO_SEND = "TO_SEND";
 
@@ -14,28 +13,6 @@ const TO_SEND = "TO_SEND";
 const getStatusCodeItem = (status: string) => ({
   Status: TableUtilities.entityGenerator.String(status),
 });
-
-export type Logger = ReturnType<typeof createLogger>;
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-const createLogger = () => {
-  const logFileName = `${process.cwd()}/log.${Date.now()}.csv`;
-  const logStream = createWriteStream(logFileName, {
-    flags: "a",
-  });
-  // header
-  logStream.write(`time,\tlog level,\ttext\n`);
-
-  return {
-    finalize: (): void => logStream.close(),
-    logFailure: (info: string, error: unknown): boolean =>
-      logStream.write(
-        `${new Date().toISOString()},failure,\t${info}: ${error}\n`
-      ),
-    logInfo: (info: string): boolean =>
-      logStream.write(`${new Date().toISOString()},info,${info}\n`),
-  };
-};
 
 /**
  */
@@ -98,10 +75,11 @@ const cleanupFiscalCodeWithMessageTable = async (
  */
 export const getHandler =
   (
+    logger: Logger,
     profileContainer: Container,
     messageContainer: Container,
     insertBulkAllFiscalCodes: ReturnType<typeof getInsertBulkFiscalCodes>,
-    insertBulkFiscalCodesWithMessage: ReturnType<
+    updateBulkFiscalCodesWithMessage: ReturnType<
       typeof getInsertBulkFiscalCodes
     >,
     {
@@ -114,7 +92,6 @@ export const getHandler =
     fromId: string = FISCAL_CODE_LOWER_BOUND,
     toId: string = FISCAL_CODE_UPPER_BOUND
   ): Promise<void> => {
-    const logger = createLogger();
     logger.logInfo("starting populateAllFiscalCodeTable()");
     await populateAllFiscalCodeTable(
       profileContainer,
@@ -130,7 +107,7 @@ export const getHandler =
       DGC_SERVICE_ID,
       fromId,
       toId,
-      insertBulkFiscalCodesWithMessage,
+      updateBulkFiscalCodesWithMessage,
       logger
     );
     logger.logInfo("ended cleanupFiscalCodeWithMessageTable()");
