@@ -5,52 +5,26 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "command": "yarn start",
-      "name": "Run yarn start",
-      "request": "launch",
-      "type": "node-terminal"
-    },
-    {
       "type": "node",
       "request": "launch",
-      "name": "Launch via Yarn",
+      "name": "Launch get",
       "runtimeExecutable": "yarn",
       "cwd": "${workspaceFolder}",
-      "runtimeArgs": ["start:debug"],
+      "runtimeArgs": ["start:get"],
       "stopOnEntry": true,
-      "port": 5858
+      "port": 5858,
+      "preLaunchTask": "yarn-build"
     },
     {
       "type": "node",
       "request": "launch",
-      "name": "Jest Current File",
-      "program": "${workspaceFolder}/node_modules/.bin/jest",
-      "args": [
-        "${fileBasenameNoExtension}"
-      ],
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "disableOptimisticBPs": true,
-      "windows": {
-        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
-      }
-    },    
-    {
-      "type": "node",
-      "request": "attach",
-      "name": "Docker: Attach to Node",
-      "preLaunchTask": "tsc-watch",
-      "protocol": "auto",
-      "port": 5859,
-      "restart": true,
-      "localRoot": "${workspaceFolder}",
-      "remoteRoot": "/usr/src/app",
-      "outFiles": [
-        "${workspaceFolder}/src/**/*.js"
-      ],
-      "skipFiles": [
-        "<node_internals>/**/*.js"
-      ]
+      "name": "Launch send",
+      "runtimeExecutable": "yarn",
+      "cwd": "${workspaceFolder}",
+      "runtimeArgs": ["start:send"],
+      "stopOnEntry": true,
+      "port": 5858,
+      "preLaunchTask": "yarn-build"
     }
   ]
 }

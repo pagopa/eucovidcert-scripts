@@ -12,6 +12,11 @@
       "presentation":{
         "reveal": "always",
       }
+    },
+    {
+      "label": "yarn-build",
+      "type": "shell",
+      "command": "yarn build"
     }
   ]
 }
