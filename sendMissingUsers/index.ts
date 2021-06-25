@@ -6,6 +6,7 @@ import {
   TableService,
 } from "azure-storage";
 import { getConfigOrThrow } from "../utils/config";
+import { createLogger } from "../utils/logger";
 import { getUdateBulkFiscalCodes } from "../utils/table_storage";
 import { getPagedQuery } from "../utils/table_storage";
 import { getHandler } from "./handler";
@@ -51,7 +52,8 @@ tableService.createTableIfNotExists(
           getPagedQuery(tableService, config.PROFILE_TABLE_NAME),
           queueService,
           getUdateBulkFiscalCodes(tableService, config.PROFILE_TABLE_NAME),
-          config
+          config,
+          createLogger()
         )()
           .then((c) => {
             // eslint-disable-next-line no-console
